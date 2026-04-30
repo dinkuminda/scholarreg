@@ -41,11 +41,27 @@ export default function App() {
   const fetchStudents = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await fetch('/api/students');
-      if (!response.ok) throw new Error('Failed to fetch students');
-      const data = await response.json();
-      setStudents(data);
+      
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch students');
+        setStudents(data);
+      } else {
+        const text = await response.text();
+        console.error("Non-JSON response:", text);
+        if (!response.ok) {
+           if (text.includes("The page could not be found") || response.status === 404) {
+             throw new Error("Server API not reachable (404). The server might still be starting up.");
+           }
+           throw new Error(`Server error: ${response.status}`);
+        }
+        throw new Error("Received unexpected HTML response from server.");
+      }
     } catch (err: any) {
+      console.error("Fetch error:", err);
       setError(err.message);
     } finally {
       setLoading(false);

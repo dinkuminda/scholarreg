@@ -25,7 +25,17 @@ async function startServer() {
     console.warn("WARNING: SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables.");
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  let supabase: any = null;
+  
+  if (supabaseUrl && supabaseKey) {
+    try {
+      supabase = createClient(supabaseUrl, supabaseKey);
+    } catch (err) {
+      console.error("Failed to initialize Supabase client:", err);
+    }
+  } else {
+    console.warn("WARNING: SUPABASE_URL or SUPABASE_ANON_KEY is missing. Database features will be disabled.");
+  }
 
   app.use(cors());
   app.use(morgan("dev"));
@@ -33,11 +43,19 @@ async function startServer() {
 
   // API Routes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", supabaseConfigured: !!supabaseUrl });
+    res.json({ 
+      status: "ok", 
+      supabaseConfigured: !!(supabaseUrl && supabaseKey),
+      supabaseInitialized: !!supabase
+    });
   });
 
   app.post("/api/register", async (req, res) => {
     try {
+      if (!supabase) {
+        return res.status(503).json({ error: "Supabase is not configured. Please set SUPABASE_URL and SUPABASE_ANON_KEY in your secrets." });
+      }
+
       const studentData = req.body;
       
       // Basic validation
@@ -71,6 +89,10 @@ async function startServer() {
 
   app.get("/api/students", async (req, res) => {
     try {
+      if (!supabase) {
+        return res.status(503).json({ error: "Supabase is not configured." });
+      }
+
       const { data, error } = await supabase
         .from("students")
         .select("*")
@@ -81,7 +103,7 @@ async function startServer() {
         return res.status(500).json({ error: error.message });
       }
 
-      res.json(data);
+      res.json(data || []);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
