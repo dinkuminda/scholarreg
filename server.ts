@@ -14,35 +14,37 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
+  console.log("Starting server implementation...");
   const app = express();
   const PORT = 3000;
 
   // Supabase Setup
-  const supabaseUrl = process.env.SUPABASE_URL || "";
-  const supabaseKey = process.env.SUPABASE_ANON_KEY || "";
-  
-  if (!supabaseUrl || !supabaseKey) {
-    console.warn("WARNING: SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables.");
+  let supabaseUrl = (process.env.SUPABASE_URL || "").trim();
+  if (supabaseUrl.endsWith('/')) {
+    supabaseUrl = supabaseUrl.slice(0, -1);
   }
+  const supabaseKey = (process.env.SUPABASE_ANON_KEY || "").trim();
+  
+  console.log(`Supabase configuration found: URL=${!!supabaseUrl}, Key=${!!supabaseKey}`);
 
   let supabase: any = null;
   
   if (supabaseUrl && supabaseKey) {
     try {
       supabase = createClient(supabaseUrl, supabaseKey);
+      console.log("Supabase client initialized successfully");
     } catch (err) {
       console.error("Failed to initialize Supabase client:", err);
     }
-  } else {
-    console.warn("WARNING: SUPABASE_URL or SUPABASE_ANON_KEY is missing. Database features will be disabled.");
   }
 
   app.use(cors());
   app.use(morgan("dev"));
   app.use(bodyParser.json());
 
-  // API Routes
+  // Health check early
   app.get("/api/health", (req, res) => {
+    console.log("Health check request received");
     res.json({ 
       status: "ok", 
       supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
