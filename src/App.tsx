@@ -26,6 +26,7 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [configStatus, setConfigStatus] = useState<{configured: boolean, initialized: boolean} | null>(null);
 
   const [formData, setFormData] = useState<NewStudent>({
     name: '',
@@ -35,8 +36,24 @@ export default function App() {
   });
 
   useEffect(() => {
+    checkHealth();
     fetchStudents();
   }, []);
+
+  const checkHealth = async () => {
+    try {
+      const res = await fetch('/api/health');
+      if (res.ok) {
+        const data = await res.json();
+        setConfigStatus({
+          configured: data.supabaseConfigured,
+          initialized: data.supabaseInitialized
+        });
+      }
+    } catch (err) {
+      console.error("Health check failed:", err);
+    }
+  };
 
   const fetchStudents = async () => {
     try {
@@ -47,22 +64,32 @@ export default function App() {
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.indexOf("application/json") !== -1) {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Failed to fetch students');
+        if (!response.ok) {
+          // If Supabase isn't configured, we'll get a 503
+          if (response.status === 503) {
+            throw new Error("Supabase is not configured. Please add SUPABASE_URL and SUPABASE_ANON_KEY to your Secrets.");
+          }
+          throw new Error(data.error || 'Failed to fetch students');
+        }
         setStudents(data);
       } else {
         const text = await response.text();
-        console.error("Non-JSON response:", text);
         if (!response.ok) {
            if (text.includes("The page could not be found") || response.status === 404) {
-             throw new Error("Server API not reachable (404). The server might still be starting up.");
+             throw new Error("The backend server is not responding to API requests. Please wait a moment or try restarting the dev server.");
            }
-           throw new Error(`Server error: ${response.status}`);
+           throw new Error(`Server error (${response.status}): ${text.substring(0, 50)}`);
         }
-        throw new Error("Received unexpected HTML response from server.");
+        throw new Error("Received an unexpected response from the server. Check your Supabase configuration.");
       }
     } catch (err: any) {
-      console.error("Fetch error:", err);
-      setError(err.message);
+      console.error("Fetch error details:", err);
+      // More user friendly error for generic fetch failures
+      if (err.message === 'Failed to fetch') {
+        setError("Could not connect to the backend server. Make sure the dev server is running.");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -119,8 +146,25 @@ export default function App() {
             <span className="hidden sm:inline">Enrolled: {students.length}</span>
             <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
             <div className="flex items-center gap-1">
-              <CheckCircle size={14} className="text-emerald-500" />
-              <span>Supabase Connected</span>
+              {!configStatus ? (
+                <div className="flex items-center gap-1 text-slate-400">
+                  <Clock size={14} className="animate-pulse" />
+                  <span>Checking...</span>
+                </div>
+              ) : configStatus.configured ? (
+                <div className="flex items-center gap-1 text-emerald-600">
+                  <CheckCircle size={14} />
+                  <span>Connected</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-amber-500 group relative cursor-help">
+                  <AlertCircle size={14} />
+                  <span>Not Configured</span>
+                  <div className="absolute top-full right-0 mt-2 p-3 bg-slate-800 text-white text-[10px] rounded-lg w-48 opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                    Add SUPABASE_URL and SUPABASE_ANON_KEY to your project's Secrets panel.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

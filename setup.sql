@@ -19,3 +19,8 @@ CREATE POLICY "Allow public access" ON students
   TO public
   USING (true)
   WITH CHECK (true);
+
+-- Optional: Sample Data
+INSERT INTO students (name, email, course, phone) VALUES
+('Jane Smith', 'jane.smith@example.edu', 'Computer Science', '+1234567890'),
+('Mark Wilson', 'm.wilson@univ.edu', 'Data Science', '+1987654321');
